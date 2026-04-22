@@ -1,0 +1,87 @@
+version: '3.8'
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  db_data:
+  wp_data:
+  ftp_data:
+  ssh_keys:
+
+services:
+  # ==================== COMPANY PROFILE (Apache) ====================
+  company-profile:
+    build: ./company-profile
+    container_name: company-profile
+    ports:
+      - "${HTTP_PORT}:80"
+    networks:
+      - internal
+    restart: unless-stopped
+
+  # ==================== WORDPRESS + APACHE ====================
+  wordpress:
+    image: wordpress:latest
+    container_name: wordpress
+    ports:
+      - "8081:80"
+    environment:
+      WORDPRESS_DB_HOST: ${WORDPRESS_DB_HOST}
+      WORDPRESS_DB_USER: ${WORDPRESS_DB_USER}
+      WORDPRESS_DB_PASSWORD: ${WORDPRESS_DB_PASSWORD}
+      WORDPRESS_DB_NAME: ${WORDPRESS_DB_NAME}
+    volumes:
+      - wp_data:/var/www/html
+    networks:
+      - internal
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  # ==================== DATABASE MARIADB ====================
+  db:
+    image: mariadb:10
+    container_name: wordpress_db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - internal
+    restart: unless-stopped
+
+  # ==================== FTPS SERVER (vsftpd with TLS) ====================
+  ftps:
+    build: ./ftps
+    container_name: ftps_server
+    ports:
+      - "21:21"
+      - "40000-40009:40000-40009"
+    volumes:
+      - ftp_data:/home/ftpuser
+    environment:
+      FTP_USER: ftpuser
+      FTP_PASS: ftppass123
+    networks:
+      - internal
+    restart: unless-stopped
+  # ==================== SSH SERVER (key-based with auto-copy) ====================
+  ssh:
+    build: ./ssh
+    container_name: ssh_server
+    ports:
+      - "${SSH_PORT}:22"
+    volumes:
+      - ssh_keys:/home/${SSH_USER}/.ssh
+    environment:
+      SSH_USER: ${SSH_USER}
+      SSH_PASSWORD: ${SSH_PASSWORD}
+      PUBLIC_KEY: ${PUBLIC_KEY}
+    networks:
+      - internal
+    restart: unless-stopped
